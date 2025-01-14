@@ -22,6 +22,7 @@ package managed
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,12 +37,11 @@ import (
 // General EKS e2e test.
 var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 	var (
-		namespace        *corev1.Namespace
-		ctx              context.Context
-		specName         = "cluster"
-		clusterName      string
-		cniAddonName     = "vpc-cni"
-		corednsAddonName = "coredns"
+		namespace    *corev1.Namespace
+		ctx          context.Context
+		specName     = "cluster"
+		clusterName  string
+		cniAddonName = "vpc-cni"
 	)
 
 	shared.ConditionalIt(runGeneralTests, "should create a cluster and add nodes", func() {
@@ -76,15 +76,22 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 		})
 
 		ginkgo.By("should set environment variables on the aws-node daemonset")
-		CheckAwsNodeEnvVarsSet(ctx, func() UpdateAwsNodeVersionSpecInput {
-			return UpdateAwsNodeVersionSpecInput{
-				E2EConfig:             e2eCtx.E2EConfig,
-				BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
-				AWSSession:            e2eCtx.BootstrapUserAWSSession,
-				Namespace:             namespace,
-				ClusterName:           clusterName,
-			}
-		})
+		Eventually(func() error {
+			defer ginkgo.GinkgoRecover()
+			CheckAwsNodeEnvVarsSet(ctx, func() UpdateAwsNodeVersionSpecInput {
+				return UpdateAwsNodeVersionSpecInput{
+					E2EConfig:             e2eCtx.E2EConfig,
+					BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
+					AWSSession:            e2eCtx.BootstrapUserAWSSession,
+					Namespace:             namespace,
+					ClusterName:           clusterName,
+				}
+			})
+			return nil
+		}).WithTimeout(5*time.Minute).WithPolling(10*time.Second).WithContext(ctx).Should(
+			Succeed(),
+			"Failed to verify AWS Node environment variables after 5 minutes of retries",
+		)
 
 		ginkgo.By("should have the VPC CNI installed")
 		CheckAddonExistsSpec(ctx, func() CheckAddonExistsSpecInput {
@@ -96,19 +103,6 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 				ClusterName:           clusterName,
 				AddonName:             cniAddonName,
 				AddonVersion:          e2eCtx.E2EConfig.GetVariable(shared.CNIAddonVersion),
-			}
-		})
-
-		ginkgo.By("should have the Coredns addon installed")
-		CheckAddonExistsSpec(ctx, func() CheckAddonExistsSpecInput {
-			return CheckAddonExistsSpecInput{
-				E2EConfig:             e2eCtx.E2EConfig,
-				BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
-				AWSSession:            e2eCtx.BootstrapUserAWSSession,
-				Namespace:             namespace,
-				ClusterName:           clusterName,
-				AddonName:             corednsAddonName,
-				AddonVersion:          e2eCtx.E2EConfig.GetVariable(shared.CorednsAddonVersion),
 			}
 		})
 
@@ -189,7 +183,7 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 			Cluster: cluster,
 		})
 		framework.WaitForClusterDeleted(ctx, framework.WaitForClusterDeletedInput{
-			Getter:  e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+			Client:  e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 			Cluster: cluster,
 		}, e2eCtx.E2EConfig.GetIntervals("", "wait-delete-cluster")...)
 	})

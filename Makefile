@@ -19,6 +19,10 @@ include $(ROOT_DIR_RELATIVE)/common.mk
 # If you update this file, please follow
 # https://suva.sh/posts/well-documented-makefiles
 
+# Go
+GO_VERSION ?=1.22.6
+GO_CONTAINER_IMAGE ?= golang:$(GO_VERSION)
+
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
 TOOLS_DIR := hack/tools
@@ -26,7 +30,7 @@ TOOLS_DIR_DEPS := $(TOOLS_DIR)/go.sum $(TOOLS_DIR)/go.mod $(TOOLS_DIR)/Makefile
 TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
 
 
-API_DIRS := cmd/clusterawsadm/api api exp/api controlplane/eks/api bootstrap/eks/api iam/api
+API_DIRS := cmd/clusterawsadm/api api exp/api controlplane/eks/api bootstrap/eks/api iam/api controlplane/rosa/api
 API_FILES := $(foreach dir, $(API_DIRS), $(call rwildcard,../../$(dir),*.go))
 
 BIN_DIR := bin
@@ -42,8 +46,10 @@ E2E_CONF_PATH  ?= $(E2E_DATA_DIR)/e2e_conf.yaml
 E2E_EKS_CONF_PATH ?= $(E2E_DATA_DIR)/e2e_eks_conf.yaml
 KUBETEST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance.yaml)
 EXP_DIR := exp
+GORELEASER_CONFIG := .goreleaser.yaml
 
 # Binaries.
+GO_INSTALL := ./scripts/go_install.sh
 GO_APIDIFF_BIN := $(BIN_DIR)/go-apidiff
 GO_APIDIFF := $(TOOLS_DIR)/$(GO_APIDIFF_BIN)
 CLUSTERCTL := $(BIN_DIR)/clusterctl
@@ -54,13 +60,19 @@ DEFAULTER_GEN := $(TOOLS_BIN_DIR)/defaulter-gen
 ENVSUBST := $(TOOLS_BIN_DIR)/envsubst
 GH := $(TOOLS_BIN_DIR)/gh
 GOJQ := $(TOOLS_BIN_DIR)/gojq
-GOLANGCI_LINT := $(TOOLS_BIN_DIR)/golangci-lint
+GOLANGCI_LINT_BIN := golangci-lint
+GOLANGCI_LINT_VER := $(shell cat .github/workflows/pr-golangci-lint.yaml | grep [[:space:]]version: | sed 's/.*version: //')
+GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
+GOLANGCI_LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
 KIND := $(TOOLS_BIN_DIR)/kind
 KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
 MOCKGEN := $(TOOLS_BIN_DIR)/mockgen
 SSM_PLUGIN := $(TOOLS_BIN_DIR)/session-manager-plugin
 YQ := $(TOOLS_BIN_DIR)/yq
 KPROMO := $(TOOLS_BIN_DIR)/kpromo
+RELEASE_NOTES := $(TOOLS_BIN_DIR)/release-notes
+GORELEASER := $(TOOLS_BIN_DIR)/goreleaser
+
 CLUSTERAWSADM_SRCS := $(call rwildcard,.,cmd/clusterawsadm/*.*)
 
 PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
@@ -70,22 +82,16 @@ DOCKER_BUILDKIT=1
 export ACK_GINKGO_DEPRECATIONS := 1.16.4
 
 # Set --output-base for conversion-gen if we are not within GOPATH
-ifneq ($(abspath $(REPO_ROOT)),$(shell go env GOPATH)/src/sigs.k8s.io/cluster-api-provider-aws)
+ifneq ($(abspath $(REPO_ROOT)),$(abspath $(shell go env GOPATH)/src/sigs.k8s.io/cluster-api-provider-aws))
 	GEN_OUTPUT_BASE := --output-base=$(REPO_ROOT)
 else
 	export GOPATH := $(shell go env GOPATH)
 endif
 
-USER_FORK ?= $(shell git config --get remote.origin.url | cut -d/ -f4) # only works on https://github.com/<username>/cluster-api.git style URLs
-ifeq ($(USER_FORK),)
-USER_FORK := $(shell git config --get remote.origin.url | cut -d: -f2 | cut -d/ -f1) # for git@github.com:<username>/cluster-api.git style URLs
-endif
-IMAGE_REVIEWERS ?= $(shell ./hack/get-project-maintainers.sh ${YQ})
-
 # Release variables
 
 STAGING_REGISTRY ?= gcr.io/k8s-staging-cluster-api-aws
-STAGING_BUCKET ?= artifacts.k8s-staging-cluster-api-aws.appspot.com
+STAGING_BUCKET ?= k8s-staging-cluster-api-aws
 BUCKET ?= $(STAGING_BUCKET)
 PROD_REGISTRY := registry.k8s.io/cluster-api-aws
 REGISTRY ?= $(STAGING_REGISTRY)
@@ -95,6 +101,10 @@ RELEASE_ALIAS_TAG ?= $(PULL_BASE_REF)
 RELEASE_DIR := out
 RELEASE_POLICIES := $(RELEASE_DIR)/AWSIAMManagedPolicyControllers.json $(RELEASE_DIR)/AWSIAMManagedPolicyControllersWithEKS.json $(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderControlPlane.json $(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderNodes.json $(RELEASE_DIR)/AWSIAMManagedPolicyControllersWithS3.json
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+USER_FORK ?= $(shell git config --get remote.origin.url | cut -d/ -f4) # only works on https://github.com/<username>/cluster-api-provider-aws.git style URLs
+ifeq ($(strip $(USER_FORK)),)
+USER_FORK := $(shell git config --get remote.origin.url | cut -d: -f2 | cut -d/ -f1) # for git@github.com:<username>/cluster-api-provider-aws.git style URLs
+endif
 
 # image name used to build the cmd/clusterawsadm
 TOOLCHAIN_IMAGE := toolchain
@@ -138,8 +148,8 @@ E2E_SKIP_EKS_UPGRADE ?= "false"
 EKS_SOURCE_TEMPLATE ?= eks/cluster-template-eks-control-plane-only.yaml
 
 # set up `setup-envtest` to install kubebuilder dependency
-export KUBEBUILDER_ENVTEST_KUBERNETES_VERSION ?= 1.24.2
-SETUP_ENVTEST_VER := v0.0.0-20230131074648-f5014c077fc3
+export KUBEBUILDER_ENVTEST_KUBERNETES_VERSION ?= 1.30.2
+SETUP_ENVTEST_VER := v0.0.0-20240923090159-236e448db12c
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -184,13 +194,15 @@ endif
 .PHONY: defaulters
 defaulters: $(DEFAULTER_GEN) ## Generate all Go types
 	$(DEFAULTER_GEN) \
-		--input-dirs=./api/v1beta2 \
-		--input-dirs=./$(EXP_DIR)/api/v1beta2 \
-		--input-dirs=./cmd/clusterawsadm/api/bootstrap/v1beta1 \
-		--input-dirs=./cmd/clusterawsadm/api/bootstrap/v1alpha1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1beta1 \
-		--v=0 $(GEN_OUTPUT_BASE) \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
+		--v=0 \
+		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
+		--output-file=zz_generated.defaults.go \
+		./api/v1beta2 \
+		./$(EXP_DIR)/api/v1beta2 \
+		./controlplane/rosa/api/v1beta2 \
+		./cmd/clusterawsadm/api/bootstrap/v1beta1 \
+		./cmd/clusterawsadm/api/bootstrap/v1alpha1
 
 .PHONY: generate
 generate: ## Generate code
@@ -215,15 +227,18 @@ generate-go-apis: ## Alias for .build/generate-go-apis
 
 .build/generate-go-apis: .build $(API_FILES) $(CONTROLLER_GEN) $(DEFAULTER_GEN) $(CONVERSION_GEN) ## Generate all Go api files
 	$(CONTROLLER_GEN) \
+		paths=./ \
 		paths=./api/... \
 		paths=./$(EXP_DIR)/api/... \
 		paths=./bootstrap/eks/api/... \
 		paths=./controlplane/eks/api/... \
+		paths=./controlplane/rosa/api/... \
 		paths=./iam/api/... \
 		paths=./controllers/... \
 		paths=./$(EXP_DIR)/controllers/... \
 		paths=./bootstrap/eks/controllers/... \
 		paths=./controlplane/eks/controllers/... \
+		paths=./controlplane/rosa/controllers/... \
 		output:crd:dir=config/crd/bases \
 		object:headerFile=./hack/boilerplate/boilerplate.generatego.txt \
 		crd:crdVersions=v1 \
@@ -237,42 +252,48 @@ generate-go-apis: ## Alias for .build/generate-go-apis
 	$(MAKE) defaulters
 
 	$(CONVERSION_GEN) \
-		--input-dirs=./api/v1beta1 \
-		--input-dirs=./cmd/clusterawsadm/api/bootstrap/v1alpha1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1beta1 \
-		--build-tag=ignore_autogenerated_conversions \
-		--output-file-base=zz_generated.conversion $(GEN_OUTPUT_BASE) \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
+		--output-file=zz_generated.conversion.go \
+		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
+		./api/v1beta1 \
+		./cmd/clusterawsadm/api/bootstrap/v1alpha1
 
 	$(CONVERSION_GEN) \
-		--input-dirs=./$(EXP_DIR)/api/v1beta1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1beta1 \
-		--build-tag=ignore_autogenerated_conversions \
-		--output-file-base=zz_generated.conversion $(GEN_OUTPUT_BASE) \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
+		--output-file=zz_generated.conversion.go \
+		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
+		./$(EXP_DIR)/api/v1beta1
 
 	$(CONVERSION_GEN) \
-		--input-dirs=./bootstrap/eks/api/v1beta1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1beta1 \
-		--build-tag=ignore_autogenerated_conversions \
-		--output-file-base=zz_generated.conversion $(GEN_OUTPUT_BASE) \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
+		--output-file=zz_generated.conversion.go \
+		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
+		./bootstrap/eks/api/v1beta1
 
 	$(CONVERSION_GEN) \
-		--input-dirs=./controlplane/eks/api/v1beta1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1beta1 \
-		--build-tag=ignore_autogenerated_conversions \
-		--output-file-base=zz_generated.conversion $(GEN_OUTPUT_BASE) \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
+		--output-file=zz_generated.conversion.go \
+		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
+		./controlplane/eks/api/v1beta1
+
+	$(CONVERSION_GEN) \
+		--extra-peer-dirs=sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1 \
+		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1beta1 \
+		--output-file=zz_generated.conversion.go \
+		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
+		./controlplane/rosa/api/v1beta2
 
 		touch $@
 
 ##@ lint and verify:
 
 .PHONY: modules
+
+$(GOLANGCI_LINT): # Build golangci-lint from tools folder.
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) $(GO_INSTALL) $(GOLANGCI_LINT_PKG) $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Lint codebase
@@ -351,7 +372,7 @@ clusterawsadm: ## Build clusterawsadm binary
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker build --build-arg ARCH=$(ARCH) --build-arg builder_image=$(GO_CONTAINER_IMAGE) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-build-all ## Build all the architecture docker images
 docker-build-all: $(addprefix docker-build-,$(ALL_ARCH))
@@ -370,7 +391,7 @@ managers: ## Alias for manager-aws-infrastructure
 
 .PHONY: manager-aws-infrastructure
 manager-aws-infrastructure: ## Build manager binary
-	CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -ldflags "${LDFLAGS} -extldflags '-static'" -o $(BIN_DIR)/manager .
+	CGO_ENABLED=0 GOARCH=${ARCH} go build -ldflags "${LDFLAGS} -extldflags '-static'" -o $(BIN_DIR)/manager .
 
 ##@ test:
 
@@ -384,7 +405,7 @@ generate-test-flavors: $(KUSTOMIZE)  ## Generate test template flavors
 
 .PHONY: e2e-image
 e2e-image: docker-pull-prerequisites $(TOOLS_BIN_DIR)/start.sh $(TOOLS_BIN_DIR)/restart.sh ## Build an e2e test image
-	docker build -f Dockerfile --tag="gcr.io/k8s-staging-cluster-api/capa-manager:e2e" .
+	docker build --build-arg builder_image=$(GO_CONTAINER_IMAGE) -f Dockerfile --tag="gcr.io/k8s-staging-cluster-api/capa-manager:e2e" .
 
 .PHONY: install-setup-envtest
 install-setup-envtest: # Install setup-envtest so that setup-envtest's eval is executed after the tool has been installed.
@@ -463,7 +484,7 @@ $(RELEASE_DIR):
 
 .PHONY: build-toolchain
 build-toolchain: ## Build the toolchain
-	docker build --target toolchain -t $(TOOLCHAIN_IMAGE) .
+	docker build --build-arg builder_image=$(GO_CONTAINER_IMAGE) --target toolchain -t $(TOOLCHAIN_IMAGE) .
 
 .PHONY: check-github-token
 check-github-token: ## Check if the github token is set
@@ -478,9 +499,9 @@ check-release-tag: ## Check if the release tag is set
 	@if [ -z "${RELEASE_TAG}" ]; then echo "RELEASE_TAG is not set"; exit 1; fi
 	@if ! [ -z "$$(git status --porcelain)" ]; then echo "Your local git repository contains uncommitted changes, use git clean before proceeding."; exit 1; fi
 
-.PHONY: create-gh-release
-create-gh-release:$(GH) ## Create release on Github
-	$(GH) release create $(VERSION) -d -F $(RELEASE_DIR)/CHANGELOG.md -t $(VERSION) -R $(GH_REPO)
+.PHONY: check-release-branch
+check-release-branch: ## Check if the release branch is set
+	@if [ -z "${RELEASE_BRANCH}" ]; then echo "RELEASE_BRANCH is not set"; exit 1; fi
 
 .PHONY: compiled-manifest
 compiled-manifest: $(RELEASE_DIR) $(KUSTOMIZE) ## Compile the manifest files
@@ -542,13 +563,12 @@ list-image: ## List images for RELEASE_TAG
 	gcloud container images list-tags $(STAGING_REGISTRY)/$(IMAGE) --filter="tags=('$(RELEASE_TAG)')" --format=json
 
 .PHONY: release
-release: clean-release check-release-tag $(RELEASE_DIR)  ## Builds and push container images using the latest git tag for the commit.
+release: clean-release check-release-tag check-release-branch $(RELEASE_DIR) $(GORELEASER)  ## Builds and push container images using the latest git tag for the commit.
 	git checkout "${RELEASE_TAG}"
 	$(MAKE) release-changelog
-	$(MAKE) release-binaries
 	CORE_CONTROLLER_IMG=$(PROD_REGISTRY)/$(CORE_IMAGE_NAME) $(MAKE) release-manifests
-	$(MAKE) release-templates
 	$(MAKE) release-policies
+	$(GORELEASER) release --config $(GORELEASER_CONFIG) --release-notes $(RELEASE_DIR)/CHANGELOG.md --clean
 
 release-policies: $(RELEASE_POLICIES) ## Release policies
 
@@ -574,36 +594,16 @@ release-manifests: ## Release manifest files
 	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
 
 .PHONY: release-changelog
-release-changelog: $(GH) ## Generates release notes using Github release notes.
-	./hack/releasechangelog.sh -v $(VERSION) -p $(PREVIOUS_VERSION) -o $(GH_ORG_NAME) -r $(GH_REPO_NAME) -c $(CORE_CONTROLLER_PROMOTED_IMG) > $(RELEASE_DIR)/CHANGELOG.md
+release-changelog: $(RELEASE_NOTES) check-release-tag check-previous-release-tag check-github-token $(RELEASE_DIR)
+	$(RELEASE_NOTES) --debug --org $(GH_ORG_NAME) --repo $(GH_REPO_NAME) --start-sha $(shell git rev-list -n 1 ${PREVIOUS_VERSION}) --end-sha $(shell git rev-list -n 1 ${RELEASE_TAG}) --output $(RELEASE_DIR)/CHANGELOG.md --go-template go-template:$(REPO_ROOT)/hack/changelog.tpl --dependencies=false --branch=${RELEASE_BRANCH} --required-author=""
 
 .PHONY: promote-images
 promote-images: $(KPROMO) $(YQ)
-	$(KPROMO) pr --project cluster-api-provider-aws --tag $(RELEASE_TAG) --reviewers "$(IMAGE_REVIEWERS)" --fork $(USER_FORK) --image cluster-api-aws-controller
+	$(KPROMO) pr --project cluster-api-aws --tag $(RELEASE_TAG) --reviewers "$(shell ./hack/get-project-maintainers.sh ${YQ})" --fork $(USER_FORK) --image cluster-api-aws-controller
 
 .PHONY: release-binaries
-release-binaries: ## Builds the binaries to publish with a release
-	RELEASE_BINARY=./cmd/clusterawsadm GOOS=linux GOARCH=amd64 $(MAKE) release-binary
-	RELEASE_BINARY=./cmd/clusterawsadm GOOS=linux GOARCH=arm64 $(MAKE) release-binary
-	RELEASE_BINARY=./cmd/clusterawsadm GOOS=darwin GOARCH=amd64 $(MAKE) release-binary
-	RELEASE_BINARY=./cmd/clusterawsadm GOOS=darwin GOARCH=arm64 $(MAKE) release-binary
-	RELEASE_BINARY=./cmd/clusterawsadm GOOS=windows GOARCH=amd64 EXT=.exe $(MAKE) release-binary
-	RELEASE_BINARY=./cmd/clusterawsadm GOOS=windows GOARCH=arm64 EXT=.exe $(MAKE) release-binary
-
-.PHONY: release-binary
-release-binary: $(RELEASE_DIR) versions.mk build-toolchain ## Release binary
-	docker run \
-		--rm \
-		-e CGO_ENABLED=0 \
-		-e GOOS=$(GOOS) \
-		-e GOARCH=$(GOARCH) \
-		--mount=source=gocache,target=/go/pkg/mod \
-		--mount=source=gocache,target=/root/.cache/go-build \
-		-v "$$(pwd):/workspace$(DOCKER_VOL_OPTS)" \
-		-w /workspace \
-		$(TOOLCHAIN_IMAGE) \
-		go build -ldflags '$(LDFLAGS) -extldflags "-static"' \
-		-o $(RELEASE_DIR)/$(notdir $(RELEASE_BINARY))-$(GOOS)-$(GOARCH)$(EXT) $(RELEASE_BINARY)
+release-binaries: $(GORELEASER) ## Builds only the binaries, not a release.
+	$(GORELEASER) build --config $(GORELEASER_CONFIG) --snapshot --clean
 
 .PHONY: release-staging
 release-staging: ## Builds and push container images and manifests to the staging bucket.
@@ -625,17 +625,11 @@ release-staging-nightly: ## Tags and push container images to the staging bucket
 release-alias-tag: # Adds the tag to the last build tag.
 	gcloud container images add-tag -q $(CORE_CONTROLLER_IMG):$(TAG) $(CORE_CONTROLLER_IMG):$(RELEASE_ALIAS_TAG)
 
-.PHONY: release-templates
-release-templates: $(RELEASE_DIR) ## Generate release templates
-	cp templates/cluster-template*.yaml $(RELEASE_DIR)/
-
 .PHONY: upload-staging-artifacts
 upload-staging-artifacts: ## Upload release artifacts to the staging bucket
+	# Example manifest location: https://storage.googleapis.com/k8s-staging-cluster-api-aws/components/nightly_main_20240425/infrastructure-components.yaml
+	# Please note that these files are deleted after a certain period, at the time of this writing 60 days after file creation.
 	gsutil cp $(RELEASE_DIR)/* gs://$(BUCKET)/components/$(RELEASE_ALIAS_TAG)
-
-.PHONY: upload-gh-artifacts
-upload-gh-artifacts: $(GH) ## Upload artifacts to Github release
-	$(GH) release upload $(VERSION) -R $(GH_REPO) --clobber  $(RELEASE_DIR)/*
 
 IMAGE_PATCH_DIR := $(ARTIFACTS)/image-patch
 
@@ -689,3 +683,8 @@ clean-temporary: ## Remove all temporary files and folders
 	rm -rf test/e2e/capi-kubeadm-control-plane-controller-manager
 	rm -rf test/e2e/logs
 	rm -rf test/e2e/resources
+
+##@ helpers:
+
+go-version: ## Print the go version we use to compile our binaries and images
+	@echo $(GO_VERSION)

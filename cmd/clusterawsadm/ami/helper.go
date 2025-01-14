@@ -38,7 +38,7 @@ const (
 )
 
 func getSupportedOsList() []string {
-	return []string{"centos-7", "ubuntu-18.04", "ubuntu-20.04", "amazon-2", "flatcar-stable"}
+	return []string{"centos-7", "ubuntu-24.04", "ubuntu-22.04", "amazon-2", "flatcar-stable", "rhel-8"}
 }
 
 func getimageRegionList() []string {
@@ -67,6 +67,7 @@ func LatestPatchRelease(searchVersion string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	//#nosec G115
 	resp, err := http.Get(fmt.Sprintf(latestStableReleaseURL, "-"+strconv.Itoa(int(searchSemVer.Major))+"."+strconv.Itoa(int(searchSemVer.Minor))))
 	if err != nil {
 		return "", err
@@ -241,16 +242,14 @@ func findAMI(imagesMap map[string][]*ec2.Image, baseOS, kubernetesVersion string
 	}
 	if val, ok := imagesMap[amiName]; ok && val != nil {
 		return latestAMI(val)
-	} else {
-		amiName, err = ec2service.GenerateAmiName(amiNameFormat, baseOS, strings.TrimPrefix(kubernetesVersion, "v"))
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to process ami format: %q", amiNameFormat)
-		}
-		if val, ok = imagesMap[amiName]; ok && val != nil {
-			return latestAMI(val)
-		}
 	}
-
+	amiName, err = ec2service.GenerateAmiName(amiNameFormat, baseOS, strings.TrimPrefix(kubernetesVersion, "v"))
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to process ami format: %q", amiNameFormat)
+	}
+	if val, ok := imagesMap[amiName]; ok && val != nil {
+		return latestAMI(val)
+	}
 	return nil, nil
 }
 

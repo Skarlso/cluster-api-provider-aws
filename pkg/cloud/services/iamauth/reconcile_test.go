@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
@@ -116,7 +116,7 @@ func createEKSCluster(name, namespace string) *ekscontrolplanev1.AWSManagedContr
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: name,
+				clusterv1.ClusterNameLabel: name,
 			},
 		},
 		Spec: ekscontrolplanev1.AWSManagedControlPlaneSpec{},
@@ -133,7 +133,7 @@ func createAWSMachinePoolForClusterWithInstanceProfile(name, namespace, clusterN
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: clusterName,
+				clusterv1.ClusterNameLabel: clusterName,
 			},
 		},
 		Spec: expinfrav1.AWSMachinePoolSpec{
@@ -152,7 +152,7 @@ func createMachinepoolForCluster(name, namespace, clusterName string, infrastruc
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: clusterName,
+				clusterv1.ClusterNameLabel: clusterName,
 			},
 		},
 		Spec: expclusterv1.MachinePoolSpec{
@@ -177,7 +177,7 @@ func createAWSMachineTemplateForClusterWithInstanceProfile(name, namespace, clus
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: clusterName,
+				clusterv1.ClusterNameLabel: clusterName,
 			},
 		},
 		Spec: infrav1.AWSMachineTemplateSpec{
@@ -198,7 +198,7 @@ func createMachineDeploymentForCluster(name, namespace, clusterName string, infr
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: clusterName,
+				clusterv1.ClusterNameLabel: clusterName,
 			},
 		},
 		Spec: clusterv1.MachineDeploymentSpec{
@@ -209,7 +209,7 @@ func createMachineDeploymentForCluster(name, namespace, clusterName string, infr
 					InfrastructureRef: infrastructureRef,
 				},
 			},
-			Replicas: pointer.Int32(2),
+			Replicas: ptr.To[int32](2),
 		},
 	}
 	return md

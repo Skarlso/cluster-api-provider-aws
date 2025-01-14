@@ -69,6 +69,14 @@ func SetDefaults_AWSClusterSpec(s *AWSClusterSpec) { //nolint:golint,stylecheck
 	if s.ControlPlaneLoadBalancer.LoadBalancerType == "" {
 		s.ControlPlaneLoadBalancer.LoadBalancerType = LoadBalancerTypeClassic
 	}
+	if s.SecondaryControlPlaneLoadBalancer != nil {
+		if s.SecondaryControlPlaneLoadBalancer.LoadBalancerType == "" {
+			s.SecondaryControlPlaneLoadBalancer.LoadBalancerType = LoadBalancerTypeNLB
+		}
+		if s.SecondaryControlPlaneLoadBalancer.Scheme == nil {
+			s.SecondaryControlPlaneLoadBalancer.Scheme = &ELBSchemeInternal
+		}
+	}
 }
 
 // SetDefaults_Labels is used to default cluster scope resources for clusterctl move.
@@ -76,7 +84,7 @@ func SetDefaults_Labels(obj *metav1.ObjectMeta) { //nolint:golint,stylecheck
 	// Defaults to set label if no labels have been set
 	if obj.Labels == nil {
 		obj.Labels = map[string]string{
-			clusterv1.ClusterctlMoveHierarchyLabelName: ""}
+			clusterv1.ClusterctlMoveHierarchyLabel: ""}
 	}
 }
 

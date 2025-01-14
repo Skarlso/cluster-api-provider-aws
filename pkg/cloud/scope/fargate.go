@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/throttle"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/util/system"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -157,6 +158,14 @@ func (s *FargateProfileScope) SubnetIDs() []string {
 	return s.FargateProfile.Spec.SubnetIDs
 }
 
+// Partition returns the machine pool subnet IDs.
+func (s *FargateProfileScope) Partition() string {
+	if s.ControlPlane.Spec.Partition == "" {
+		s.ControlPlane.Spec.Partition = system.GetPartitionFromRegion(s.ControlPlane.Spec.Region)
+	}
+	return s.ControlPlane.Spec.Partition
+}
+
 // IAMReadyFalse marks the ready condition false using warning if error isn't
 // empty.
 func (s *FargateProfileScope) IAMReadyFalse(reason string, err string) error {
@@ -169,6 +178,7 @@ func (s *FargateProfileScope) IAMReadyFalse(reason string, err string) error {
 		expinfrav1.IAMFargateRolesReadyCondition,
 		reason,
 		severity,
+		"%s",
 		err,
 	)
 	if err := s.PatchObject(); err != nil {

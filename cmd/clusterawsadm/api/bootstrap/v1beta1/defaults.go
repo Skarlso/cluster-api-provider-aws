@@ -18,7 +18,7 @@ package v1beta1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/v2/iam/api/v1beta1"
@@ -33,6 +33,8 @@ const (
 	DefaultStackName = "cluster-api-provider-aws-sigs-k8s-io"
 	// DefaultPartitionName is the default security partition for AWS ARNs.
 	DefaultPartitionName = "aws"
+	// PartitionNameUSGov is the default security partition for AWS ARNs.
+	PartitionNameUSGov = "aws-us-gov"
 	// DefaultKMSAliasPattern is the default KMS alias.
 	DefaultKMSAliasPattern = "cluster-api-provider-aws-*"
 	// DefaultS3BucketPrefix is the default S3 bucket prefix.
@@ -58,7 +60,7 @@ func SetDefaults_BootstrapUser(obj *BootstrapUser) { //nolint:golint,stylecheck
 // SetDefaults_AWSIAMConfigurationSpec is used by defaulter-gen.
 func SetDefaults_AWSIAMConfigurationSpec(obj *AWSIAMConfigurationSpec) { //nolint:golint,stylecheck
 	if obj.NameSuffix == nil {
-		obj.NameSuffix = pointer.String(iamv1.DefaultNameSuffix)
+		obj.NameSuffix = ptr.To[string](iamv1.DefaultNameSuffix)
 	}
 	if obj.Partition == "" {
 		obj.Partition = DefaultPartitionName
@@ -111,7 +113,7 @@ func SetDefaults_AWSIAMConfiguration(obj *AWSIAMConfiguration) { //nolint:golint
 	obj.APIVersion = SchemeGroupVersion.String()
 	obj.Kind = "AWSIAMConfiguration"
 	if obj.Spec.NameSuffix == nil {
-		obj.Spec.NameSuffix = pointer.String(iamv1.DefaultNameSuffix)
+		obj.Spec.NameSuffix = ptr.To[string](iamv1.DefaultNameSuffix)
 	}
 	if obj.Spec.StackName == "" {
 		obj.Spec.StackName = DefaultStackName

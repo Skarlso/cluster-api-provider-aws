@@ -17,9 +17,17 @@ limitations under the License.
 package v1beta2
 
 import (
+	"strings"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+)
+
+const (
+	// PreventDeletionLabel can be used in situations where preventing delation is allowed. The docs
+	// and the CRD will call this out where its allowed.
+	PreventDeletionLabel = "aws.cluster.x-k8s.io/prevent-deletion"
 )
 
 // AWSResourceReference is a reference to a specific AWS resource by ID or filters.
@@ -68,6 +76,30 @@ const (
 	// MachineCreated indicates whether the machine has been created or not. If not,
 	// it should include a reason and message for the failure.
 	MachineCreated AWSMachineProviderConditionType = "MachineCreated"
+)
+
+const (
+	// ExternalResourceGCAnnotation is the name of an annotation that indicates if
+	// external resources should be garbage collected for the cluster.
+	ExternalResourceGCAnnotation = "aws.cluster.x-k8s.io/external-resource-gc"
+
+	// ExternalResourceGCTasksAnnotation is the name of an annotation that indicates what
+	// external resources tasks should be executed by garbage collector for the cluster.
+	ExternalResourceGCTasksAnnotation = "aws.cluster.x-k8s.io/external-resource-tasks-gc"
+)
+
+// GCTask defines a task to be executed by the garbage collector.
+type GCTask string
+
+var (
+	// GCTaskLoadBalancer defines a task to cleaning up resources for AWS load balancers.
+	GCTaskLoadBalancer = GCTask("load-balancer")
+
+	// GCTaskTargetGroup defines a task to cleaning up resources for AWS target groups.
+	GCTaskTargetGroup = GCTask("target-group")
+
+	// GCTaskSecurityGroup defines a task to cleaning up resources for AWS security groups.
+	GCTaskSecurityGroup = GCTask("security-group")
 )
 
 // AZSelectionScheme defines the scheme of selecting AZs.
@@ -194,6 +226,18 @@ type Instance struct {
 	// SpotMarketOptions option for configuring instances to be run using AWS Spot instances.
 	SpotMarketOptions *SpotMarketOptions `json:"spotMarketOptions,omitempty"`
 
+	// PlacementGroupName specifies the name of the placement group in which to launch the instance.
+	// +optional
+	PlacementGroupName string `json:"placementGroupName,omitempty"`
+
+	// PlacementGroupPartition is the partition number within the placement group in which to launch the instance.
+	// This value is only valid if the placement group, referred in `PlacementGroupName`, was created with
+	// strategy set to partition.
+	// +kubebuilder:validation:Minimum:=1
+	// +kubebuilder:validation:Maximum:=7
+	// +optional
+	PlacementGroupPartition int64 `json:"placementGroupPartition,omitempty"`
+
 	// Tenancy indicates if instance should run on shared or single-tenant hardware.
 	// +optional
 	Tenancy string `json:"tenancy,omitempty"`
@@ -205,6 +249,18 @@ type Instance struct {
 	// InstanceMetadataOptions is the metadata options for the EC2 instance.
 	// +optional
 	InstanceMetadataOptions *InstanceMetadataOptions `json:"instanceMetadataOptions,omitempty"`
+
+	// PrivateDNSName is the options for the instance hostname.
+	// +optional
+	PrivateDNSName *PrivateDNSName `json:"privateDnsName,omitempty"`
+
+	// PublicIPOnLaunch is the option to associate a public IP on instance launch
+	// +optional
+	PublicIPOnLaunch *bool `json:"publicIPOnLaunch,omitempty"`
+
+	// CapacityReservationID specifies the target Capacity Reservation into which the instance should be launched.
+	// +optional
+	CapacityReservationID *string `json:"capacityReservationId,omitempty"`
 }
 
 // InstanceMetadataState describes the state of InstanceMetadataOptions.HttpEndpoint and InstanceMetadataOptions.InstanceMetadataTags
@@ -264,9 +320,10 @@ type InstanceMetadataOptions struct {
 	// always returns the version 2.0 credentials; the version 1.0 credentials are
 	// not available.
 	//
-	// Default: required
+	// Default: optional
+	//
 	// +kubebuilder:validation:Enum:=optional;required
-	// +kubebuilder:default=required
+	// +kubebuilder:default=optional
 	HTTPTokens HTTPTokensState `json:"httpTokens,omitempty"`
 
 	// Set to enabled to allow access to instance tags from the instance metadata.
@@ -275,11 +332,13 @@ type InstanceMetadataOptions struct {
 	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS).
 	//
 	// Default: disabled
+	//
 	// +kubebuilder:validation:Enum:=enabled;disabled
 	// +kubebuilder:default=disabled
 	InstanceMetadataTags InstanceMetadataState `json:"instanceMetadataTags,omitempty"`
 }
 
+// SetDefaults sets the default values for the InstanceMetadataOptions.
 func (obj *InstanceMetadataOptions) SetDefaults() {
 	if obj.HTTPEndpoint == "" {
 		obj.HTTPEndpoint = InstanceMetadataEndpointStateEnabled
@@ -288,7 +347,7 @@ func (obj *InstanceMetadataOptions) SetDefaults() {
 		obj.HTTPPutResponseHopLimit = 1
 	}
 	if obj.HTTPTokens == "" {
-		obj.HTTPTokens = HTTPTokensStateRequired // Defaults to IMDSv2
+		obj.HTTPTokens = HTTPTokensStateOptional // Defaults to IMDSv1
 	}
 	if obj.InstanceMetadataTags == "" {
 		obj.InstanceMetadataTags = InstanceMetadataEndpointStateDisabled
@@ -377,4 +436,34 @@ const (
 	AmazonLinux EKSAMILookupType = "AmazonLinux"
 	// AmazonLinuxGPU is the AmazonLinux GPU AMI type.
 	AmazonLinuxGPU EKSAMILookupType = "AmazonLinuxGPU"
+)
+
+// PrivateDNSName is the options for the instance hostname.
+type PrivateDNSName struct {
+	// EnableResourceNameDNSAAAARecord indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+	// +optional
+	EnableResourceNameDNSAAAARecord *bool `json:"enableResourceNameDnsAAAARecord,omitempty"`
+	// EnableResourceNameDNSARecord indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+	// +optional
+	EnableResourceNameDNSARecord *bool `json:"enableResourceNameDnsARecord,omitempty"`
+	// The type of hostname to assign to an instance.
+	// +optional
+	// +kubebuilder:validation:Enum:=ip-name;resource-name
+	HostnameType *string `json:"hostnameType,omitempty"`
+}
+
+// SubnetSchemaType specifies how given network should be divided on subnets
+// in the VPC depending on the number of AZs.
+type SubnetSchemaType string
+
+// Name returns subnet schema type name without prefix.
+func (s *SubnetSchemaType) Name() string {
+	return strings.ToLower(strings.TrimPrefix(string(*s), "Prefer"))
+}
+
+var (
+	// SubnetSchemaPreferPrivate allocates more subnets in the VPC to private subnets.
+	SubnetSchemaPreferPrivate = SubnetSchemaType("PreferPrivate")
+	// SubnetSchemaPreferPublic allocates more subnets in the VPC to public subnets.
+	SubnetSchemaPreferPublic = SubnetSchemaType("PreferPublic")
 )
