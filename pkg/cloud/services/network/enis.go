@@ -75,7 +75,7 @@ func (s *Service) deleteOrphanedENIs(ctx context.Context) error {
 		eniID := aws.ToString(eni.NetworkInterfaceId)
 		s.scope.Debug("Deleting orphaned network interface", "eni-id", eniID)
 
-		if _, err := s.EC2Client.DeleteNetworkInterface(context.TODO(), &ec2.DeleteNetworkInterfaceInput{
+		if _, err := s.EC2Client.DeleteNetworkInterface(ctx, &ec2.DeleteNetworkInterfaceInput{
 			NetworkInterfaceId: eni.NetworkInterfaceId,
 		}); err != nil {
 			errs = append(errs, fmt.Errorf("deleting network interface %q: %w", eniID, err))
