@@ -103,6 +103,16 @@ rules:
   - cluster.x-k8s.io
   resources:
   - machinepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
   - machinepools/status
   verbs:
   - create
