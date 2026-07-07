@@ -421,7 +421,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "rejects prefix without /* suffix in additional IAM instance profile",
+			name: "rejects prefix starting with slash in additional IAM instance profile",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -429,7 +429,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
 						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
-							{Name: "test", Prefix: "test/path"},
+							{Name: "test", Prefix: "/abc"},
 						},
 					},
 				},
@@ -437,7 +437,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "rejects prefix starting with / in additional IAM instance profile",
+			name: "rejects ARN instead of IAM instance profile name",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -445,24 +445,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
 						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
-							{Name: "test", Prefix: "/test/*"},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "rejects duplicate names in additional IAM instance profiles",
-			cluster: &infrav1.AWSCluster{
-				Spec: infrav1.AWSClusterSpec{
-					S3Bucket: &infrav1.S3Bucket{
-						Name:                           "foo",
-						ControlPlaneIAMInstanceProfile: "foo",
-						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
-							{Name: "duplicate", Prefix: "path1/*"},
-							{Name: "duplicate", Prefix: "path2/*"},
+							{Name: "arn:aws:iam::123456789012:role/karpenter-nodes", Prefix: "karpenter-nodes/*"},
 						},
 					},
 				},

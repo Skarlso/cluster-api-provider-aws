@@ -327,16 +327,15 @@ type AWSClusterStatus struct {
 // access to bootstrap data with custom S3 prefixes.
 type AdditionalIAMInstanceProfile struct {
 	// Name is the name of the IAM instance profile that will be granted access.
-	// This should match the IAM role name (not the ARN).
+	// This must match the IAM role name (not the ARN).
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=128
+	// +kubebuilder:validation:Pattern=`^[\w+=,.@-]+$`
 	Name string `json:"name"`
 
-	// Prefix is the S3 object prefix (path) that this profile can access.
-	// Must end with /* to allow wildcard access (e.g., "karpenter-nodes/*", "path/to/data/*").
-	// Can also be "*" for wildcard-only access to the entire bucket.
-	// The prefix should not start with a leading slash.
-	// +kubebuilder:validation:Pattern=`^(\*|[a-zA-Z0-9!_.*'()-]+(/[a-zA-Z0-9!_.*'()-]+)*/\*)$`
+	// Prefix is the S3 object key prefix (path) this profile is granted access to.
+	// It is appended to the bucket in the policy's resource ARN, so use a trailing "/*"
+	// for wildcard access to a path (e.g. "karpenter-nodes/*") or "*" for the whole bucket.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=512
 	Prefix string `json:"prefix"`

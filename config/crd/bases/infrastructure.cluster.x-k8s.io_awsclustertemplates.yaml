@@ -1464,19 +1464,18 @@ spec:
                                 name:
                                   description: |-
                                     Name is the name of the IAM instance profile that will be granted access.
-                                    This should match the IAM role name (not the ARN).
+                                    This must match the IAM role name (not the ARN).
                                   maxLength: 128
                                   minLength: 1
+                                  pattern: ^[\w+=,.@-]+$
                                   type: string
                                 prefix:
                                   description: |-
-                                    Prefix is the S3 object prefix (path) that this profile can access.
-                                    Must end with /* to allow wildcard access (e.g., "karpenter-nodes/*", "path/to/data/*").
-                                    Can also be "*" for wildcard-only access to the entire bucket.
-                                    The prefix should not start with a leading slash.
+                                    Prefix is the S3 object key prefix (path) this profile is granted access to.
+                                    It is appended to the bucket in the policy's resource ARN, so use a trailing "/*"
+                                    for wildcard access to a path (e.g. "karpenter-nodes/*") or "*" for the whole bucket.
                                   maxLength: 512
                                   minLength: 1
-                                  pattern: ^(\*|[a-zA-Z0-9!_.*'()-]+(/[a-zA-Z0-9!_.*'()-]+)*/\*)$
                                   type: string
                               required:
                               - name

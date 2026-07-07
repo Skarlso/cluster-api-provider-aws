@@ -574,9 +574,9 @@ func (s *Service) bucketPolicy(bucketName string) (string, error) {
 		}
 
 		// Add statements for additional IAM instance profiles with custom prefixes
-		for _, additionalProfile := range bucket.AdditionalIAMInstanceProfiles {
+		for i, additionalProfile := range bucket.AdditionalIAMInstanceProfiles {
 			statements = append(statements, iam.StatementEntry{
-				Sid:    fmt.Sprintf("additional-%s", additionalProfile.Name),
+				Sid:    fmt.Sprintf("additional-%d", i),
 				Effect: iam.EffectAllow,
 				Principal: map[iam.PrincipalType]iam.PrincipalID{
 					iam.PrincipalAWS: []string{
