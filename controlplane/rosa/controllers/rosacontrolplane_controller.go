@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"reflect"
@@ -85,6 +86,12 @@ const (
 
 	// ExternalAuthProviderLastAppliedAnnotation annotation tracks the last applied external auth configuration to inform if an update is required.
 	ExternalAuthProviderLastAppliedAnnotation = "controlplane.cluster.x-k8s.io/rosacontrolplane-last-applied-external-auth-provider"
+
+	// ROSAControlPlaneCredentialExpiryAnnotation tracks when the break-glass credential in a kubeconfig secret expires.
+	ROSAControlPlaneCredentialExpiryAnnotation = "controlplane.cluster.x-k8s.io/rosacontrolplane-credential-expiry"
+
+	// credentialRefreshThreshold is how long before expiry a break-glass credential should be refreshed.
+	credentialRefreshThreshold = 1 * time.Hour
 )
 
 // ROSAControlPlaneReconciler reconciles a ROSAControlPlane object.
@@ -969,23 +976,31 @@ func (r *ROSAControlPlaneReconciler) reconcileExternalAuthProviders(ctx context.
 	return nil
 }
 
-// Generates a temporarily admin kubeconfig using break-glass credentials for the user to bootstreap their environment like setting up RBAC for oidc users/groups.
-// This Kubeonconfig will be created only once initially and be valid for only 24h.
-// The kubeconfig secret will not be autoamticallty rotated and will be invalid after the 24h. However, users can opt to manually delete the secret to trigger the generation of a new one which will be valid for another 24h.
+// reconcileExternalAuthBootstrapKubeconfig ensures both the bootstrap kubeconfig (for user RBAC setup)
+// and the CAPI-contract kubeconfig (for RemoteConnectionProbe) exist and are refreshed before expiry.
 func (r *ROSAControlPlaneReconciler) reconcileExternalAuthBootstrapKubeconfig(ctx context.Context, externalAuthClient *rosa.ExternalAuthClient, rosaScope *scope.ROSAControlPlaneScope, cluster *cmv1.Cluster) error {
-	kubeconfigSecret := rosaScope.ExternalAuthBootstrapKubeconfigSecret()
-	err := r.Client.Get(ctx, client.ObjectKeyFromObject(kubeconfigSecret), kubeconfigSecret)
-	if err == nil {
-		// already exist.
-		return nil
-	} else if !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to get bootstrap kubeconfig secret: %w", err)
+	bootstrapSecret := rosaScope.ExternalAuthBootstrapKubeconfigSecret()
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(bootstrapSecret), bootstrapSecret); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get bootstrap kubeconfig secret: %w", err)
+		}
+		bootstrapSecret = nil
 	}
 
-	// kubeconfig doesn't exist, generate a new one.
+	clusterRef := client.ObjectKeyFromObject(rosaScope.Cluster)
+	capiSecret, err := secret.GetFromNamespacedName(ctx, r.Client, clusterRef, secret.Kubeconfig)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get kubeconfig secret: %w", err)
+	}
+
+	if !needsCredentialRefresh(bootstrapSecret) && !needsCredentialRefresh(capiSecret) {
+		return nil
+	}
+
+	expiration := time.Now().Add(time.Hour * 24)
 	breakGlassConfig, err := cmv1.NewBreakGlassCredential().
 		Username(names.SimpleNameGenerator.GenerateName("capi-admin-")). // OCM requires unique usernames
-		ExpirationTimestamp(time.Now().Add(time.Hour * 24)).
+		ExpirationTimestamp(expiration).
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to build break glass config: %v", err)
@@ -1001,14 +1016,56 @@ func (r *ROSAControlPlaneReconciler) reconcileExternalAuthBootstrapKubeconfig(ct
 		return fmt.Errorf("failed to poll break glass kubeconfig: %v", err)
 	}
 
-	kubeconfigSecret.Data = map[string][]byte{
-		"value": []byte(kubeconfigData),
-	}
-	if err := r.Client.Create(ctx, kubeconfigSecret); err != nil {
-		return fmt.Errorf("failed to create external auth bootstrap kubeconfig: %v", err)
+	expiryAnnotation := map[string]string{
+		ROSAControlPlaneCredentialExpiryAnnotation: expiration.Format(time.RFC3339),
 	}
 
-	return nil
+	bootstrapNewSecret := rosaScope.ExternalAuthBootstrapKubeconfigSecret()
+	if err := r.reconcileKubeconfigSecret(ctx, kubeconfigData, expiryAnnotation, bootstrapSecret, bootstrapNewSecret); err != nil {
+		return err
+	}
+
+	controllerOwnerRef := *metav1.NewControllerRef(rosaScope.ControlPlane, rosacontrolplanev1.GroupVersion.WithKind("ROSAControlPlane"))
+	capiNewSecret := kubeconfig.GenerateSecretWithOwner(clusterRef, []byte(kubeconfigData), controllerOwnerRef)
+	return r.reconcileKubeconfigSecret(ctx, kubeconfigData, expiryAnnotation, capiSecret, capiNewSecret)
+}
+
+func (r *ROSAControlPlaneReconciler) reconcileKubeconfigSecret(ctx context.Context, kubeconfigData string, annotations map[string]string, existing *corev1.Secret, newSecret *corev1.Secret) error {
+	if existing != nil {
+		existing.Data = map[string][]byte{secret.KubeconfigDataName: []byte(kubeconfigData)}
+		if existing.Annotations == nil {
+			existing.Annotations = make(map[string]string)
+		}
+		maps.Copy(existing.Annotations, annotations)
+		return r.Client.Update(ctx, existing)
+	}
+
+	newSecret.Data = map[string][]byte{secret.KubeconfigDataName: []byte(kubeconfigData)}
+	if newSecret.Annotations == nil {
+		newSecret.Annotations = make(map[string]string)
+	}
+	maps.Copy(newSecret.Annotations, annotations)
+	return r.Client.Create(ctx, newSecret)
+}
+
+// needsCredentialRefresh returns true if the break-glass credential in the secret
+// is missing, has no expiry annotation, or is within the refresh threshold of expiring.
+func needsCredentialRefresh(s *corev1.Secret) bool {
+	if s == nil {
+		return true
+	}
+
+	expiryStr, ok := s.Annotations[ROSAControlPlaneCredentialExpiryAnnotation]
+	if !ok {
+		return true
+	}
+
+	expiry, err := time.Parse(time.RFC3339, expiryStr)
+	if err != nil {
+		return true
+	}
+
+	return time.Until(expiry) < credentialRefreshThreshold
 }
 
 func (r *ROSAControlPlaneReconciler) reconcileKubeconfig(ctx context.Context, rosaScope *scope.ROSAControlPlaneScope, ocmClient rosa.OCMClient, cluster *cmv1.Cluster) error {
