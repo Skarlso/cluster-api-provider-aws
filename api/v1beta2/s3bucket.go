@@ -67,24 +67,24 @@ func (b *S3Bucket) Validate() []*field.Error {
 		}
 	}
 
-	// Validate additional IAM instance profiles
-	for i, profile := range b.AdditionalIAMRoles {
-		profilePath := field.NewPath("spec", "s3Bucket", fmt.Sprintf("additionalIAMRoles[%d]", i))
+	// Validate additional IAM roles
+	for i, role := range b.AdditionalIAMRoles {
+		rolePath := field.NewPath("spec", "s3Bucket", fmt.Sprintf("additionalIAMRoles[%d]", i))
 
-		if profile.Name == "" {
-			errs = append(errs, field.Required(profilePath.Child("name"), "can't be empty"))
-		} else if !iamRoleNameRegex.MatchString(profile.Name) {
-			errs = append(errs, field.Invalid(profilePath.Child("name"), profile.Name,
-				"must be an IAM role name, not an ARN"))
+		if role.Name == "" {
+			errs = append(errs, field.Required(rolePath.Child("name"), "can't be empty"))
+		} else if !iamRoleNameRegex.MatchString(role.Name) {
+			errs = append(errs, field.Invalid(rolePath.Child("name"), role.Name,
+				"must be an IAM role name, not an ARN or invalid name"))
 		}
 
-		if profile.Prefix == "" {
-			errs = append(errs, field.Required(profilePath.Child("prefix"), "can't be empty"))
+		if role.Prefix == "" {
+			errs = append(errs, field.Required(rolePath.Child("prefix"), "can't be empty"))
 		}
 
 		// Must not start with /
-		if profile.Prefix != "" && strings.HasPrefix(profile.Prefix, "/") {
-			errs = append(errs, field.Invalid(profilePath.Child("prefix"), profile.Prefix,
+		if role.Prefix != "" && strings.HasPrefix(role.Prefix, "/") {
+			errs = append(errs, field.Invalid(rolePath.Child("prefix"), role.Prefix,
 				"must not start with /"))
 		}
 	}

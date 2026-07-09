@@ -325,7 +325,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "accepts valid additional IAM instance profile",
+			name: "accepts valid additional IAM role",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -341,7 +341,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "accepts valid additional IAM instance profile with nested prefix",
+			name: "accepts valid additional IAM role with nested prefix",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -357,7 +357,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "accepts wildcard-only prefix for additional IAM instance profile",
+			name: "accepts wildcard-only prefix for additional IAM role",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -373,7 +373,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "accepts overlap with standard prefixes for additional IAM instance profile",
+			name: "accepts overlap with standard prefixes for additional IAM role",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -389,7 +389,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "rejects empty name in additional IAM instance profile",
+			name: "rejects empty name in additional IAM role",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -405,7 +405,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "rejects empty prefix in additional IAM instance profile",
+			name: "rejects empty prefix in additional IAM role",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -421,7 +421,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "rejects prefix starting with slash in additional IAM instance profile",
+			name: "rejects prefix starting with slash in additional IAM role",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{
@@ -437,7 +437,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "rejects ARN instead of IAM instance profile name",
+			name: "rejects ARN instead of IAM role name",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					S3Bucket: &infrav1.S3Bucket{

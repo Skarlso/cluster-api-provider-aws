@@ -573,21 +573,21 @@ func (s *Service) bucketPolicy(bucketName string) (string, error) {
 				})
 		}
 
-		// Add statements for additional IAM instance profiles with custom prefixes
-		for i, additionalProfile := range bucket.AdditionalIAMRoles {
+		// Add statements for additional IAM roles with custom prefixes
+		for i, additionalRole := range bucket.AdditionalIAMRoles {
 			statements = append(statements, iam.StatementEntry{
 				Sid:    fmt.Sprintf("additional-%d", i),
 				Effect: iam.EffectAllow,
 				Principal: map[iam.PrincipalType]iam.PrincipalID{
 					iam.PrincipalAWS: []string{
 						fmt.Sprintf("arn:%s:iam::%s:role/%s",
-							partition, *accountID.Account, additionalProfile.Name),
+							partition, *accountID.Account, additionalRole.Name),
 					},
 				},
 				Action: []string{"s3:GetObject"},
 				Resource: []string{
 					fmt.Sprintf("arn:%s:s3:::%s/%s",
-						partition, bucketName, additionalProfile.Prefix),
+						partition, bucketName, additionalRole.Prefix),
 				},
 			})
 		}

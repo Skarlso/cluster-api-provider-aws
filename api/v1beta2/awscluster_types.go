@@ -333,7 +333,7 @@ type AdditionalIAMRole struct {
 	// +kubebuilder:validation:Pattern=`^[\w+=,.@-]+$`
 	Name string `json:"name"`
 
-	// Prefix is the S3 object key prefix (path) this profile is granted access to.
+	// Prefix is the S3 object key prefix (path) this role is granted access to.
 	// It is appended to the bucket in the policy's resource ARN, so use a trailing "/*"
 	// for wildcard access to a path (e.g. "karpenter-nodes/*") or "*" for the whole bucket.
 	// +kubebuilder:validation:MinLength=1
@@ -353,7 +353,7 @@ type S3Bucket struct {
 	// +optional
 	NodesIAMInstanceProfiles []string `json:"nodesIAMInstanceProfiles,omitempty"`
 
-	// AdditionalIAMRoles is a list of additional IAM instance profiles
+	// AdditionalIAMRoles is a list of additional IAM roles
 	// with custom S3 prefixes for accessing bootstrap data.
 	// This is useful for custom node pools (e.g., Karpenter) that need access
 	// to bootstrap data stored under custom prefixes.
