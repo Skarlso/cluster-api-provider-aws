@@ -321,12 +321,12 @@ type AWSClusterStatus struct {
 	Conditions     clusterv1beta1.Conditions     `json:"conditions,omitempty"`
 }
 
-// AdditionalIAMInstanceProfile defines an additional IAM instance profile
+// AdditionalIAMRole defines an additional IAM role
 // with a custom S3 prefix for accessing bootstrap data from S3 Bucket.
 // This enables support for custom node pools (e.g., Karpenter) that need
 // access to bootstrap data with custom S3 prefixes.
-type AdditionalIAMInstanceProfile struct {
-	// Name is the name of the IAM instance profile that will be granted access.
+type AdditionalIAMRole struct {
+	// Name is the name of the IAM role that will be granted access.
 	// This must match the IAM role name (not the ARN).
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=128
@@ -353,14 +353,14 @@ type S3Bucket struct {
 	// +optional
 	NodesIAMInstanceProfiles []string `json:"nodesIAMInstanceProfiles,omitempty"`
 
-	// AdditionalIAMInstanceProfiles is a list of additional IAM instance profiles
+	// AdditionalIAMRoles is a list of additional IAM instance profiles
 	// with custom S3 prefixes for accessing bootstrap data.
 	// This is useful for custom node pools (e.g., Karpenter) that need access
 	// to bootstrap data stored under custom prefixes.
 	// +optional
 	// +listType=map
 	// +listMapKey=name
-	AdditionalIAMInstanceProfiles []AdditionalIAMInstanceProfile `json:"additionalIAMInstanceProfiles,omitempty"`
+	AdditionalIAMRoles []AdditionalIAMRole `json:"additionalIAMRoles,omitempty"`
 
 	// PresignedURLDuration defines the duration for which presigned URLs are valid.
 	//

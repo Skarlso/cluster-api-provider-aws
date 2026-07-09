@@ -1860,22 +1860,22 @@ spec:
                   (https://coreos.github.io/ignition/) for bootstrapping (requires
                   BootstrapFormatIgnition feature flag to be enabled).
                 properties:
-                  additionalIAMInstanceProfiles:
+                  additionalIAMRoles:
                     description: |-
-                      AdditionalIAMInstanceProfiles is a list of additional IAM instance profiles
+                      AdditionalIAMRoles is a list of additional IAM instance profiles
                       with custom S3 prefixes for accessing bootstrap data.
                       This is useful for custom node pools (e.g., Karpenter) that need access
                       to bootstrap data stored under custom prefixes.
                     items:
                       description: |-
-                        AdditionalIAMInstanceProfile defines an additional IAM instance profile
+                        AdditionalIAMRole defines an additional IAM role
                         with a custom S3 prefix for accessing bootstrap data from S3 Bucket.
                         This enables support for custom node pools (e.g., Karpenter) that need
                         access to bootstrap data with custom S3 prefixes.
                       properties:
                         name:
                           description: |-
-                            Name is the name of the IAM instance profile that will be granted access.
+                            Name is the name of the IAM role that will be granted access.
                             This must match the IAM role name (not the ARN).
                           maxLength: 128
                           minLength: 1

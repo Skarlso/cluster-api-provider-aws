@@ -356,7 +356,7 @@ func TestReconcileBucket(t *testing.T) {
 					Name:                           expectedBucketName,
 					ControlPlaneIAMInstanceProfile: "control-plane.cluster-api-provider-aws.sigs.k8s.io",
 					NodesIAMInstanceProfiles:       []string{"nodes.cluster-api-provider-aws.sigs.k8s.io"},
-					AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+					AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 						{
 							Name:   expectedProfileName,
 							Prefix: expectedPrefix,
@@ -403,7 +403,7 @@ func TestReconcileBucket(t *testing.T) {
 					Name:                           expectedBucketName,
 					ControlPlaneIAMInstanceProfile: "control-plane.cluster-api-provider-aws.sigs.k8s.io",
 					NodesIAMInstanceProfiles:       []string{"nodes.cluster-api-provider-aws.sigs.k8s.io"},
-					AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+					AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 						{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
 						{Name: "custom-workload", Prefix: "custom/workload/*"},
 					},
@@ -446,7 +446,7 @@ func TestReconcileBucket(t *testing.T) {
 				Bucket: &infrav1.S3Bucket{
 					Name:                 "test-bucket",
 					PresignedURLDuration: &duration,
-					AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+					AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 						{Name: "should-be-ignored", Prefix: "ignored/*"},
 					},
 				},

@@ -332,7 +332,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
 						},
 					},
@@ -348,7 +348,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "custom", Prefix: "custom/deep/path/*"},
 						},
 					},
@@ -364,7 +364,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "wildcard-profile", Prefix: "*"},
 						},
 					},
@@ -380,7 +380,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "overlap-profile", Prefix: "node/*"},
 						},
 					},
@@ -396,7 +396,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "", Prefix: "test/*"},
 						},
 					},
@@ -412,7 +412,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "test", Prefix: ""},
 						},
 					},
@@ -428,7 +428,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "test", Prefix: "/abc"},
 						},
 					},
@@ -444,7 +444,7 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 						Name:                           "foo",
 						ControlPlaneIAMInstanceProfile: "foo",
 						NodesIAMInstanceProfiles:       []string{"bar"},
-						AdditionalIAMInstanceProfiles: []infrav1.AdditionalIAMInstanceProfile{
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
 							{Name: "arn:aws:iam::123456789012:role/karpenter-nodes", Prefix: "karpenter-nodes/*"},
 						},
 					},

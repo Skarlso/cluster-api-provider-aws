@@ -68,8 +68,8 @@ func (b *S3Bucket) Validate() []*field.Error {
 	}
 
 	// Validate additional IAM instance profiles
-	for i, profile := range b.AdditionalIAMInstanceProfiles {
-		profilePath := field.NewPath("spec", "s3Bucket", fmt.Sprintf("additionalIAMInstanceProfiles[%d]", i))
+	for i, profile := range b.AdditionalIAMRoles {
+		profilePath := field.NewPath("spec", "s3Bucket", fmt.Sprintf("additionalIAMRoles[%d]", i))
 
 		if profile.Name == "" {
 			errs = append(errs, field.Required(profilePath.Child("name"), "can't be empty"))
