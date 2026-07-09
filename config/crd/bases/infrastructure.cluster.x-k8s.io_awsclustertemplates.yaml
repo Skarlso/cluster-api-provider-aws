@@ -1484,6 +1484,7 @@ spec:
                             type: array
                             x-kubernetes-list-map-keys:
                             - name
+                            - prefix
                             x-kubernetes-list-type: map
                           bestEffortDeleteObjects:
                             description: BestEffortDeleteObjects defines whether access/permission

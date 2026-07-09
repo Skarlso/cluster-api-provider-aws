@@ -453,6 +453,40 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "accepts same role name with different prefixes in additional IAM roles",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+							{Name: "karpenter-nodes", Prefix: "other/*"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "rejects exact duplicate name and prefix in additional IAM roles",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "accepts vpc cidr",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{

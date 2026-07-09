@@ -360,6 +360,7 @@ type S3Bucket struct {
 	// +optional
 	// +listType=map
 	// +listMapKey=name
+	// +listMapKey=prefix
 	AdditionalIAMRoles []AdditionalIAMRole `json:"additionalIAMRoles,omitempty"`
 
 	// PresignedURLDuration defines the duration for which presigned URLs are valid.
