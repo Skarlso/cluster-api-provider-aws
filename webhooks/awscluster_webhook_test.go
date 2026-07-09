@@ -325,6 +325,168 @@ func TestAWSClusterValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "accepts valid additional IAM role",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "accepts valid additional IAM role with nested prefix",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "custom", Prefix: "custom/deep/path/*"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "accepts wildcard-only prefix for additional IAM role",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "wildcard-profile", Prefix: "*"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "accepts overlap with standard prefixes for additional IAM role",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "overlap-profile", Prefix: "node/*"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "rejects empty name in additional IAM role",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "", Prefix: "test/*"},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects empty prefix in additional IAM role",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "test", Prefix: ""},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects prefix starting with slash in additional IAM role",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "test", Prefix: "/abc"},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects ARN instead of IAM role name",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "arn:aws:iam::123456789012:role/karpenter-nodes", Prefix: "karpenter-nodes/*"},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "accepts same role name with different prefixes in additional IAM roles",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+							{Name: "karpenter-nodes", Prefix: "other/*"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "rejects exact duplicate name and prefix in additional IAM roles",
+			cluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					S3Bucket: &infrav1.S3Bucket{
+						Name:                           "foo",
+						ControlPlaneIAMInstanceProfile: "foo",
+						NodesIAMInstanceProfiles:       []string{"bar"},
+						AdditionalIAMRoles: []infrav1.AdditionalIAMRole{
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+							{Name: "karpenter-nodes", Prefix: "karpenter-nodes/*"},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "accepts vpc cidr",
 			cluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
