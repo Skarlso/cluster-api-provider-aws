@@ -573,6 +573,7 @@ func TestRosaControlPlaneReconcileStatusVersion(t *testing.T) {
 			api := (&v1.ClusterAPIBuilder{}).URL("https://url.com:5000")
 			version := (&v1.VersionBuilder{}).RawID(rosaControlPlane.Spec.Version)
 			mockCluster, _ := v1.NewCluster().AWS(aws).ID("cluster-1").Version(version).Status(status).Console(console).API(api).
+				DeleteProtection(v1.NewDeleteProtection().Enabled(false)).
 				RegistryConfig(v1.NewClusterRegistryConfig().
 					AdditionalTrustedCa(map[string]string{"trusted-ca": "-----BEGIN CERTIFICATE----- testcert -----END CERTIFICATE-----"}).
 					AllowedRegistriesForImport(v1.NewRegistryLocation().

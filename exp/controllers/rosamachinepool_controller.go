@@ -317,6 +317,12 @@ func (r *ROSAMachinePoolReconciler) reconcileDelete(
 ) error {
 	machinePoolScope.Info("Reconciling deletion of RosaMachinePool")
 
+	if machinePoolScope.ControlPlane.Spec.DeleteProtection == rosacontrolplanev1.DeleteProtectionEnabled {
+		machinePoolScope.Info("Delete protection is enabled on ROSAControlPlane, skipping NodePool deletion in OCM")
+		controllerutil.RemoveFinalizer(machinePoolScope.RosaMachinePool, expinfrav1.RosaMachinePoolFinalizer)
+		return nil
+	}
+
 	ocmClient, err := r.NewOCMClient(ctx, rosaControlPlaneScope)
 	if err != nil || ocmClient == nil {
 		// TODO: need to expose in status, as likely the credentials are invalid

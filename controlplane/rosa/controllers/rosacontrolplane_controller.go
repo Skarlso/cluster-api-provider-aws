@@ -286,6 +286,11 @@ func (r *ROSAControlPlaneReconciler) reconcileNormal(ctx context.Context, rosaSc
 		rosaScope.ControlPlane.Status.Ready = false
 		rosaScope.ControlPlane.Status.Version = rosa.RawVersionID(cluster.Version())
 
+		if err := rosa.ReconcileDeleteProtection(rosaScope, ocmClient, cluster); err != nil {
+			rosaScope.Error(err, "failed to reconcile delete protection")
+			return ctrl.Result{RequeueAfter: time.Minute}, nil
+		}
+
 		switch cluster.Status().State() {
 		case cmv1.ClusterStateReady:
 			v1beta1conditions.MarkTrue(rosaScope.ControlPlane, rosacontrolplanev1.ROSAControlPlaneReadyCondition)
@@ -386,6 +391,19 @@ func (r *ROSAControlPlaneReconciler) reconcileNormal(ctx context.Context, rosaSc
 	rosaScope.Info("cluster created", "state", cluster.Status().State())
 	rosaScope.ControlPlane.Status.ID = cluster.ID()
 
+	if rosaScope.ControlPlane.Spec.DeleteProtection == rosacontrolplanev1.DeleteProtectionEnabled {
+		if err := rosa.UpdateClusterDeletionProtection(ocmClient, cluster.ID(), true); err != nil {
+			v1beta1conditions.MarkFalse(rosaScope.ControlPlane,
+				rosacontrolplanev1.ROSAControlPlaneReadyCondition,
+				rosacontrolplanev1.ReconciliationFailedReason,
+				clusterv1beta1.ConditionSeverityError,
+				"cluster '%s' was created but delete protection could not be enabled: %s",
+				cluster.ID(),
+				err.Error())
+			return ctrl.Result{}, fmt.Errorf("failed to enable delete protection for cluster '%s': %w", cluster.ID(), err)
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -457,6 +475,13 @@ func (r *ROSAControlPlaneReconciler) reconcileDelete(ctx context.Context, rosaSc
 	}
 	if cluster == nil {
 		// cluster and machinepools are deleted, removing finalizer.
+		controllerutil.RemoveFinalizer(rosaScope.ControlPlane, ROSAControlPlaneFinalizer)
+
+		return ctrl.Result{}, nil
+	}
+
+	if rosa.IsDeleteProtectionBlocking(rosaScope, cluster) {
+		rosaScope.Info("Delete protection is enabled, removing finalizer without deleting the ROSA cluster")
 		controllerutil.RemoveFinalizer(rosaScope.ControlPlane, ROSAControlPlaneFinalizer)
 
 		return ctrl.Result{}, nil

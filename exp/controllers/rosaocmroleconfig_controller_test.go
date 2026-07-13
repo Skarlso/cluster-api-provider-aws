@@ -520,7 +520,7 @@ func TestROSAOCMRoleConfigSetUpRuntimeWithExpiredAWSCredentials(t *testing.T) {
 		Client: testEnv.Client,
 		NewOCMClient: func(ctx context.Context, scope caparosa.OCMSecretsRetriever) (caparosa.OCMClient, error) {
 			ocmClientCallCount++
-			return ocmClient, nil
+			return caparosa.NewOCMClientFromRosaClient(ocmClient), nil
 		},
 		runtimeFactory: nil, // Use default setUpRuntime (not the mock factory)
 	}
