@@ -56,7 +56,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	rosacontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/api/v1beta2"
@@ -116,6 +118,30 @@ func (r *ROSAControlPlaneReconciler) SetupWithManager(ctx context.Context, mgr c
 		For(rosaControlPlane).
 		WithOptions(options).
 		WithEventFilter(predicates.ResourceHasFilterLabel(mgr.GetScheme(), log.GetLogger(), r.WatchFilterValue)).
+		WithEventFilter(
+			predicate.Funcs{
+				// Drop Update events that are status-only changes on ROSAControlPlane objects.
+				// Without this, Close() patching a condition re-enqueues the item immediately via
+				// the watch, bypassing the exponential backoff that an error return is supposed to engage.
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					oldCP, ok := e.ObjectOld.(*rosacontrolplanev1.ROSAControlPlane)
+					if !ok {
+						return true
+					}
+					newCP, ok := e.ObjectNew.(*rosacontrolplanev1.ROSAControlPlane)
+					if !ok {
+						return true
+					}
+					oldCP = oldCP.DeepCopy()
+					newCP = newCP.DeepCopy()
+					oldCP.Status = rosacontrolplanev1.RosaControlPlaneStatus{}
+					newCP.Status = rosacontrolplanev1.RosaControlPlaneStatus{}
+					oldCP.ObjectMeta.ResourceVersion = ""
+					newCP.ObjectMeta.ResourceVersion = ""
+					return !cmp.Equal(oldCP, newCP)
+				},
+			},
+		).
 		Build(r)
 	if err != nil {
 		return fmt.Errorf("failed setting up the ROSAControlPlane controller manager: %w", err)
