@@ -51,6 +51,11 @@ import (
 	"sigs.k8s.io/cluster-api/util/predicates"
 )
 
+const (
+	cfnResourceTypeSubnet = "AWS::EC2::Subnet"
+	validationError       = "ValidationError"
+)
+
 // ROSANetworkReconciler reconciles a ROSANetwork object.
 type ROSANetworkReconciler struct {
 	client.Client
@@ -99,7 +104,7 @@ func (r *ROSANetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	cfStack, err := awsClient.GetCFStack(ctx, rosaNetworkScope.ROSANetwork.Spec.StackName)
 	if err != nil {
 		var apiErr smithy.APIError // in case the stack does not exist, AWS returns ValidationError
-		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ValidationError" {
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == validationError {
 			cfStack = nil
 		} else {
 			return ctrl.Result{}, fmt.Errorf("error fetching CF stack details: %w", err)
@@ -278,7 +283,7 @@ func (r *ROSANetworkReconciler) parseSubnets(rosaNet *expinfrav1.ROSANetwork, aw
 	subnets := make(map[string]expinfrav1.ROSANetworkSubnet)
 
 	for _, resource := range rosaNet.Status.Resources {
-		if resource.ResourceType != "AWS::EC2::Subnet" {
+		if resource.ResourceType != cfnResourceTypeSubnet {
 			continue
 		}
 
